@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .models import UserRole
+from .models import ListingStatus, UserRole
 
 
 class HealthResponse(BaseModel):
@@ -23,6 +23,7 @@ class ListingResponse(BaseModel):
     title: str
     category: str
     subcity: str
+    status: ListingStatus
     price_birr: int
     description: str
     is_published: bool
@@ -62,6 +63,14 @@ class ChatAccessResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: Any
+
+
+class ListingUpdate(BaseModel):
+    title: str = Field(min_length=3, max_length=150)
+    category: str = Field(min_length=2, max_length=64)
+    subcity: str = Field(min_length=2, max_length=64)
+    price_birr: int = Field(gt=0)
+    description: str = Field(min_length=5, max_length=2000)
 
 
 class AuthRequestOtpRequest(BaseModel):

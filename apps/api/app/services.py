@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .locations import enforce_addis_subcity
@@ -11,6 +11,7 @@ from .models import (
     BuyerCreditBalance,
     Listing,
     ListingUnlock,
+    ListingStatus,
     PaymentEvent,
     PaymentType,
     SellerCapacityBalance,
@@ -144,13 +145,17 @@ def purchase_seller_capacity(db: Session, seller: User, slots: int, idempotency_
 
 def create_listing(db: Session, seller: User, *, title: str, category: str, subcity: str, price_birr: int, description: str) -> Listing:
     _require_role(seller, UserRole.SELLER)
-    normalized_subcity = enforce_addis_subcity(subcity)
+    try:
+        normalized_subcity = enforce_addis_subcity(subcity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     listing = Listing(
         seller_id=seller.id,
         title=title,
         category=category.strip(),
         subcity=normalized_subcity,
+        status=ListingStatus.DRAFT,
         price_birr=price_birr,
         description=description,
         is_published=False,
@@ -170,8 +175,10 @@ def publish_listing(db: Session, seller: User, listing_id: int) -> Listing:
             raise HTTPException(status_code=404, detail="Listing not found")
         if listing.seller_id != seller.id:
             raise HTTPException(status_code=403, detail="You can only publish your own listings")
-        if listing.is_published:
+        if listing.status == ListingStatus.PUBLISHED:
             raise HTTPException(status_code=400, detail="Listing already published")
+        if listing.status != ListingStatus.DRAFT:
+            raise HTTPException(status_code=400, detail="Only draft listings can be published")
 
         capacity = db.execute(
             select(SellerCapacityBalance).where(SellerCapacityBalance.seller_id == seller.id).with_for_update()
@@ -180,9 +187,84 @@ def publish_listing(db: Session, seller: User, listing_id: int) -> Listing:
             raise HTTPException(status_code=402, detail="Insufficient listing capacity")
 
         capacity.slots_remaining -= 1
+        listing.status = ListingStatus.PUBLISHED
         listing.is_published = True
 
     db.refresh(listing)
+    return listing
+
+
+def update_listing(
+    db: Session,
+    seller: User,
+    listing_id: int,
+    *,
+    title: str,
+    category: str,
+    subcity: str,
+    price_birr: int,
+    description: str,
+) -> Listing:
+    _require_role(seller, UserRole.SELLER)
+
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if listing.seller_id != seller.id:
+        raise HTTPException(status_code=403, detail="You can only edit your own listings")
+
+    listing.title = title
+    listing.category = category.strip()
+    try:
+        listing.subcity = enforce_addis_subcity(subcity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    listing.price_birr = price_birr
+    listing.description = description
+
+    db.commit()
+    db.refresh(listing)
+    return listing
+
+
+def list_published_listings(
+    db: Session,
+    *,
+    category: str | None = None,
+    subcity: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
+    keyword: str | None = None,
+) -> list[Listing]:
+    stmt = select(Listing).where(Listing.status == ListingStatus.PUBLISHED)
+    if category:
+        stmt = stmt.where(Listing.category == category.strip())
+    if subcity:
+        try:
+            normalized_subcity = enforce_addis_subcity(subcity)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        stmt = stmt.where(Listing.subcity == normalized_subcity)
+    if min_price is not None:
+        stmt = stmt.where(Listing.price_birr >= min_price)
+    if max_price is not None:
+        stmt = stmt.where(Listing.price_birr <= max_price)
+    if keyword:
+        term = f"%{keyword.strip()}%"
+        stmt = stmt.where(or_(Listing.title.ilike(term), Listing.description.ilike(term)))
+    stmt = stmt.order_by(Listing.created_at.desc())
+    return db.execute(stmt).scalars().all()
+
+
+def get_published_listing(db: Session, listing_id: int) -> Listing:
+    listing = db.execute(
+        select(Listing).where(
+            Listing.id == listing_id,
+            Listing.status == ListingStatus.PUBLISHED,
+        )
+    ).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
     return listing
 
 
@@ -191,7 +273,7 @@ def unlock_listing_contact(db: Session, buyer: User, listing_id: int) -> UnlockR
 
     with _transaction_scope(db):
         listing = db.execute(select(Listing).where(Listing.id == listing_id).with_for_update()).scalar_one_or_none()
-        if not listing or not listing.is_published:
+        if not listing or listing.status != ListingStatus.PUBLISHED:
             raise HTTPException(status_code=404, detail="Published listing not found")
 
         existing_unlock = db.execute(

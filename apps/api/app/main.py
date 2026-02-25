@@ -1,12 +1,10 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth import request_otp, verify_otp_and_issue_token
 from .db import Base, engine, get_db
 from .deps import get_current_user
-from .models import Listing
 from .schemas import (
     AuthRequestOtpRequest,
     AuthRequestOtpResponse,
@@ -16,6 +14,7 @@ from .schemas import (
     ChatAccessResponse,
     HealthResponse,
     ListingCreate,
+    ListingUpdate,
     ListingResponse,
     MeResponse,
     PurchaseResponse,
@@ -24,10 +23,13 @@ from .schemas import (
 )
 from .services import (
     create_listing,
+    get_published_listing,
     has_chat_access,
+    list_published_listings,
     publish_listing,
     purchase_buyer_credits,
     purchase_seller_capacity,
+    update_listing,
     unlock_listing_contact,
 )
 
@@ -120,6 +122,26 @@ def create_listing_route(
     return ListingResponse.model_validate(listing)
 
 
+@app.patch("/listings/{listing_id}", response_model=ListingResponse)
+def update_listing_route(
+    listing_id: int,
+    payload: ListingUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+) -> ListingResponse:
+    listing = update_listing(
+        db,
+        user,
+        listing_id,
+        title=payload.title,
+        category=payload.category,
+        subcity=payload.subcity,
+        price_birr=payload.price_birr,
+        description=payload.description,
+    )
+    return ListingResponse.model_validate(listing)
+
+
 @app.post("/listings/{listing_id}/publish", response_model=ListingResponse)
 def publish_listing_route(
     listing_id: int,
@@ -131,16 +153,28 @@ def publish_listing_route(
 
 
 @app.get("/listings", response_model=list[ListingResponse])
-def get_listings(db: Session = Depends(get_db)) -> list[ListingResponse]:
-    listings = db.execute(select(Listing).where(Listing.is_published.is_(True)).order_by(Listing.created_at.desc())).scalars().all()
+def get_listings(
+    category: str | None = Query(default=None),
+    subcity: str | None = Query(default=None),
+    min_price: int | None = Query(default=None, ge=0),
+    max_price: int | None = Query(default=None, ge=0),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[ListingResponse]:
+    listings = list_published_listings(
+        db,
+        category=category,
+        subcity=subcity,
+        min_price=min_price,
+        max_price=max_price,
+        keyword=keyword,
+    )
     return [ListingResponse.model_validate(listing) for listing in listings]
 
 
 @app.get("/listings/{listing_id}", response_model=ListingResponse)
 def get_listing(listing_id: int, db: Session = Depends(get_db)) -> ListingResponse:
-    listing = db.execute(select(Listing).where(Listing.id == listing_id, Listing.is_published.is_(True))).scalar_one_or_none()
-    if not listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
+    listing = get_published_listing(db, listing_id)
     return ListingResponse.model_validate(listing)
 
 

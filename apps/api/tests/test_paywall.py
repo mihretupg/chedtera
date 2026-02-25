@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -143,7 +144,8 @@ def test_addis_only_subcity_validation():
             description="Office desk",
         )
         raised = False
-    except ValueError:
+    except HTTPException as exc:
+        assert exc.status_code == 400
         raised = True
 
     assert raised is True

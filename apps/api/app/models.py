@@ -12,6 +12,14 @@ class UserRole(str, enum.Enum):
     SELLER = "seller"
 
 
+class ListingStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    SOLD = "sold"
+    ARCHIVED = "archived"
+    HIDDEN = "hidden"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -73,6 +81,7 @@ class Listing(Base):
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     subcity: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[ListingStatus] = mapped_column(Enum(ListingStatus), nullable=False, default=ListingStatus.DRAFT, index=True)
     price_birr: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str] = mapped_column(String(2000), nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
