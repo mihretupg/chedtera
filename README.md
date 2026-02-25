@@ -58,6 +58,32 @@ $env:DATABASE_URL="postgresql+psycopg://chedtera:chedtera@localhost:5432/chedter
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## DB Migrations + Seed
+
+Run from `apps/api`:
+
+```bash
+pip install -r requirements.txt
+alembic upgrade head
+python -m app.seed
+```
+
+Optional shortcut (if `make` is available):
+
+```bash
+make migrate
+make seed
+```
+
+Tables in initial migration include:
+
+- users, categories, subcities (Addis only), listings, listing_images
+- plan_catalog, seller_plans
+- credit_packages, buyer_credit_wallet, credit_unlocks
+- conversations, messages
+- payments, purchases
+- reports, admin_actions
+
 ## Run Web Locally (without Docker)
 
 ```bash
@@ -72,7 +98,7 @@ Backend tests:
 
 ```bash
 cd apps/api
-pytest
+py -3.13 -m pytest
 ```
 
 Web production build:
