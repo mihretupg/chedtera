@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chedtera-postgres
+    environment:
+      POSTGRES_DB: chedtera
+      POSTGRES_USER: chedtera
+      POSTGRES_PASSWORD: chedtera
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: chedtera-redis
+    profiles: ["cache"]
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./apps/api
+    container_name: chedtera-api
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql+psycopg://chedtera:chedtera@postgres:5432/chedtera
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+
+  web:
+    build:
+      context: ./apps/web
+    container_name: chedtera-web
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:
