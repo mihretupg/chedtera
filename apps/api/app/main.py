@@ -3,15 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .auth import request_otp, verify_otp_and_issue_token
 from .db import Base, engine, get_db
 from .deps import get_current_user
 from .models import Listing
 from .schemas import (
+    AuthRequestOtpRequest,
+    AuthRequestOtpResponse,
+    AuthTokenResponse,
+    AuthVerifyOtpRequest,
     BuyerCreditPurchaseRequest,
     ChatAccessResponse,
     HealthResponse,
     ListingCreate,
     ListingResponse,
+    MeResponse,
     PurchaseResponse,
     SellerCapacityPurchaseRequest,
     UnlockResponse,
@@ -44,6 +50,36 @@ def on_startup() -> None:
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.post("/auth/request-otp", response_model=AuthRequestOtpResponse)
+def request_otp_route(payload: AuthRequestOtpRequest, db: Session = Depends(get_db)) -> AuthRequestOtpResponse:
+    request_otp(
+        db,
+        phone=payload.phone,
+        full_name=payload.full_name,
+        role=payload.role,
+        subcity=payload.subcity,
+    )
+    return AuthRequestOtpResponse(detail="OTP sent")
+
+
+@app.post("/auth/verify-otp", response_model=AuthTokenResponse)
+def verify_otp_route(payload: AuthVerifyOtpRequest, db: Session = Depends(get_db)) -> AuthTokenResponse:
+    token = verify_otp_and_issue_token(db, phone=payload.phone, otp=payload.otp)
+    return AuthTokenResponse(access_token=token)
+
+
+@app.get("/me", response_model=MeResponse)
+def get_me(user=Depends(get_current_user)) -> MeResponse:
+    return MeResponse(
+        id=user.id,
+        role=user.role,
+        full_name=user.full_name,
+        phone=user.phone,
+        subcity=user.subcity,
+        is_banned=user.is_banned,
+    )
 
 
 @app.post("/payments/buyer-credits", response_model=PurchaseResponse)

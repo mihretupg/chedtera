@@ -2,6 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .models import UserRole
+
 
 class HealthResponse(BaseModel):
     status: str = "ok"
@@ -60,3 +62,33 @@ class ChatAccessResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: Any
+
+
+class AuthRequestOtpRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=32)
+    full_name: str = Field(min_length=2, max_length=120)
+    role: UserRole
+    subcity: str = Field(min_length=2, max_length=64)
+
+
+class AuthRequestOtpResponse(BaseModel):
+    detail: str
+
+
+class AuthVerifyOtpRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=32)
+    otp: str = Field(min_length=4, max_length=12)
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class MeResponse(BaseModel):
+    id: int
+    role: UserRole
+    full_name: str
+    phone: str
+    subcity: str
+    is_banned: bool

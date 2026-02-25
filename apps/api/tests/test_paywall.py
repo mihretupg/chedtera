@@ -21,7 +21,7 @@ def make_session():
 
 def test_buyer_credit_purchase_is_idempotent():
     db = make_session()
-    buyer = User(id=10, role=UserRole.BUYER, full_name="Buyer A", phone="+251900000001")
+    buyer = User(id=10, role=UserRole.BUYER, full_name="Buyer A", phone="+251900000001", subcity="bole")
     db.add(buyer)
     db.commit()
 
@@ -41,8 +41,8 @@ def test_buyer_credit_purchase_is_idempotent():
 
 def test_unlock_deducts_once_and_returns_phone():
     db = make_session()
-    seller = User(id=20, role=UserRole.SELLER, full_name="Seller", phone="+251911111111")
-    buyer = User(id=21, role=UserRole.BUYER, full_name="Buyer", phone="+251922222222")
+    seller = User(id=20, role=UserRole.SELLER, full_name="Seller", phone="+251911111111", subcity="yeka")
+    buyer = User(id=21, role=UserRole.BUYER, full_name="Buyer", phone="+251922222222", subcity="bole")
     db.add_all([seller, buyer])
     db.commit()
 
@@ -79,7 +79,7 @@ def test_unlock_deducts_once_and_returns_phone():
 
 def test_publish_requires_capacity_and_deducts_slot():
     db = make_session()
-    seller = User(id=30, role=UserRole.SELLER, full_name="Seller", phone="+251933333333")
+    seller = User(id=30, role=UserRole.SELLER, full_name="Seller", phone="+251933333333", subcity="arada")
     db.add(seller)
     db.commit()
 
@@ -105,7 +105,7 @@ def test_publish_requires_capacity_and_deducts_slot():
 
 def test_public_payload_does_not_expose_phone():
     db = make_session()
-    seller = User(id=40, role=UserRole.SELLER, full_name="Seller", phone="+251944444444")
+    seller = User(id=40, role=UserRole.SELLER, full_name="Seller", phone="+251944444444", subcity="kirkos")
     db.add(seller)
     db.commit()
 
@@ -128,7 +128,7 @@ def test_public_payload_does_not_expose_phone():
 
 def test_addis_only_subcity_validation():
     db = make_session()
-    seller = User(id=50, role=UserRole.SELLER, full_name="Seller", phone="+251955555555")
+    seller = User(id=50, role=UserRole.SELLER, full_name="Seller", phone="+251955555555", subcity="lideta")
     db.add(seller)
     db.commit()
 
